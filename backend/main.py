@@ -41,8 +41,15 @@ TÚ: "No te preocupes, vamos a arreglarlo juntos. Sigue estos pasos:
 4. Vuelve a enchufarlo y enciende la impresora.
 ¿Ha vuelto a funcionar?"
 
+Usuario: "no tengo internet"
+TÚ: "Vamos a solucionarlo paso a paso:
+1. Mira el router — esa cajita con lucecitas que da el wifi. ¿Las luces están encendidas?
+2. Si alguna luz está roja o apagada, apaga el router (botón detrás) y vuelve a encenderlo.
+3. Espera 1 minuto y prueba de nuevo.
+¿Ha funcionado?"
+
 REGLAS:
-- En la primera conversacion empieza con un saludo (¡Hola!, ¡Buenos días!, etc.).
+- En la primera conversacion empieza con un saludo (¡Hola!, ¡Buenos días!, ¡Buenas tardes!, etc.).
 - Responde directamente al problema sin rodeos.
 - Si hay una imagen analízala describiendo qué ves.
 - Si la pregunta no es de IT responde: "Solo puedo ayudarte con problemas técnicos. ¿Tienes alguna incidencia IT?"
@@ -52,7 +59,10 @@ REGLAS:
 load_dotenv()
 app = FastAPI(title="DigiHelp API - Backend")
 
-app.mount("/videos", StaticFiles(directory="C:/Users/elmen/Desktop/Proyecto-Final/DigiHelp_PC/videos"), name="videos")
+# Montar carpeta de vídeos solo si existe (evita error al arrancar en otros entornos)
+_videos_dir = os.getenv("VIDEOS_DIR", "videos")
+if os.path.exists(_videos_dir):
+    app.mount("/videos", StaticFiles(directory=_videos_dir), name="videos")
 
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
@@ -60,9 +70,11 @@ def get_db_connection():
     try:
         return mysql.connector.connect(
             host=os.getenv("DB_HOST"),
+            port=int(os.getenv("DB_PORT", 3306)),
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME")
+            database=os.getenv("DB_NAME"),
+            connection_timeout=10
         )
     except Exception as e:
         print(f"Error de base de datos: {e}")
@@ -87,12 +99,11 @@ def login_usuario(datos: LoginData):
 
 @app.post("/chat_multimodal")
 async def chat_multimodal(
-    mensaje: str = Form(...), 
-    historial: str = Form("[]"),  
+    mensaje: str = Form(...),
+    historial: str = Form("[]"),
     archivo: UploadFile = File(None)
 ):
     try:
-        # 👉 1. INTERCEPTAMOS PALABRAS CLAVE EN TU TABLA 'videos'
         conn = get_db_connection()
         if conn:
             cursor = conn.cursor(dictionary=True)
@@ -100,22 +111,21 @@ async def chat_multimodal(
             respuestas_db = cursor.fetchall()
             cursor.close()
             conn.close()
-            
+
             mensaje_lower = mensaje.lower()
             for fila in respuestas_db:
                 if fila['palabra_clave'].lower() in mensaje_lower:
-                    # ¡HAY COINCIDENCIA! Cortamos a la IA y devolvemos tu base de datos
                     return {
-                        "status": "ok", 
-                        "respuesta": fila['mensaje'],    # Usamos tu columna 'mensaje'
-                        "ruta_video": fila['ruta_video'] # Usamos tu columna 'ruta_video'
+                        "status": "ok",
+                        "respuesta": fila['mensaje'],
+                        "ruta_video": fila['ruta_video']
                     }
 
-        # 2. SI NO HAY PALABRA CLAVE, PROCESO NORMAL DE IA
         texto_extraido = ""
         es_imagen = False
         base64_image = ""
-        
+        ext = ""
+
         if archivo:
             contenido = await archivo.read()
             ext = archivo.filename.split('.')[-1].lower()
@@ -136,14 +146,14 @@ async def chat_multimodal(
 
         mensajes_groq = [{"role": "system", "content": SYSTEM_PROMPT}]
         historial_lista = json.loads(historial)
-        
-        for msg in historial_lista[:-1]: 
-            role = "assistant" if msg["rol"] in ["assistant", "model"] else "user"
-            mensajes_groq.append({"role": role, "content": msg["texto"]})
+
+        for msg in historial_lista[:-1]:
+            role = "assistant" if msg.get("rol") in ["assistant", "model"] else "user"
+            mensajes_groq.append({"role": role, "content": msg.get("texto", "")})
 
         if es_imagen:
             mensajes_groq.append({
-                "role": "user", 
+                "role": "user",
                 "content": [
                     {"type": "text", "text": mensaje},
                     {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{base64_image}"}}
@@ -165,7 +175,7 @@ async def chat_multimodal(
                 temperature=0.6,
                 max_tokens=1024,
             )
-            
+
         respuesta_ia = chat_completion.choices[0].message.content
         return {"status": "ok", "respuesta": respuesta_ia}
     except Exception as e:
@@ -176,12 +186,19 @@ async def guardar_chat(chat: ChatCreate):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        mensajes_json = json.dumps(chat.mensajes, ensure_ascii=False)
+        # Nunca guardamos mensajes system en la BD
+        mensajes_limpios = [
+            m for m in chat.mensajes
+            if (m.get('role') or m.get('rol', '')) not in ('system',)
+            and (m.get('content') or m.get('texto', '')).strip() != ''
+        ]
+        mensajes_json = json.dumps(mensajes_limpios, ensure_ascii=False)
         cursor.execute("""
             INSERT INTO chats (usuario_id, chat_id, titulo, fecha, mensajes)
             VALUES (%s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE titulo=%s, fecha=%s, mensajes=%s
-        """, (chat.usuario_id, chat.chat_id, chat.titulo, chat.fecha, mensajes_json, chat.titulo, chat.fecha, mensajes_json))
+        """, (chat.usuario_id, chat.chat_id, chat.titulo, chat.fecha, mensajes_json,
+              chat.titulo, chat.fecha, mensajes_json))
         conn.commit()
         cursor.close()
         conn.close()
@@ -199,44 +216,139 @@ async def cargar_chats(usuario_id: int):
         cursor.close()
         conn.close()
         for row in rows:
-            if isinstance(row["mensajes"], str):
-                viejos = json.loads(row["mensajes"])
-                # Conservamos 'ruta_video' al cargar el historial
-                row["mensajes"] = [{'rol': m.get('rol') or m.get('role'), 'texto': m.get('texto') or m.get('content'), 'ruta_video': m.get('ruta_video')} for m in viejos if m.get('role') != 'system']
+            raw = row["mensajes"]
+            if isinstance(raw, str):
+                raw = json.loads(raw)
+            # Filtramos mensajes system y normalizamos campos (compatibilidad versión PC y móvil)
+            row["mensajes"] = [
+                {
+                    'rol':       m.get('rol') or m.get('role', 'user'),
+                    'texto':     m.get('texto') or m.get('content', ''),
+                    'ruta_video': m.get('ruta_video'),
+                    'timestamp': m.get('timestamp', ''),
+                }
+                for m in raw
+                if (m.get('role') or m.get('rol')) not in ('system',)
+                and (m.get('content') or m.get('texto', '')).strip() != ''
+            ]
         return {"status": "ok", "chats": rows}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error al cargar")
 
-@app.post("/crear_incidencia")
-async def crear_incidencia(t: dict):
+# ── NUEVO: Eliminar chat ──────────────────────────────────────────
+@app.delete("/eliminar_chat/{usuario_id}/{chat_id}")
+async def eliminar_chat(usuario_id: int, chat_id: str):
     try:
-        prompt_evaluador = """Eres un técnico IT evaluando un historial de chat. 
-        Si el usuario NO tiene un problema técnico real, o si el problema YA FUE SOLUCIONADO durante la charla, responde ÚNICAMENTE con la palabra: FALSA_ALARMA. 
-        Si hay un problema técnico real y NO se ha solucionado aún, genera un resumen muy breve (máximo 10 palabras) del problema."""
-
-        chat_completion = groq_client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": prompt_evaluador},
-                {"role": "user", "content": t['problema']} 
-            ],
-            model="llama-3.3-70b-versatile",
-            temperature=0.1,
-            max_tokens=60,
-        )
-        
-        resumen_problema = chat_completion.choices[0].message.content.strip().strip('"')
-
-        if "FALSA_ALARMA" in resumen_problema.upper():
-            return {"status": "ignorado", "mensaje": "No hay problema real o ya se resolvió."}
-
         conn = get_db_connection()
         cursor = conn.cursor()
-        sql = "INSERT INTO incidencias (usuario, problema, urgencia, estado, fecha, departamento, email) VALUES (%s, %s, %s, 'pendiente', NOW(), %s, %s)"
-        cursor.execute(sql, (t['usuario'], resumen_problema, t['urgencia'], t['departamento'], t['email']))
+        cursor.execute("DELETE FROM chats WHERE usuario_id=%s AND chat_id=%s", (usuario_id, chat_id))
         conn.commit()
         cursor.close()
         conn.close()
         return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error al eliminar")
+
+# ── NUEVO: Guardar preferencias ───────────────────────────────────
+@app.post("/guardar_prefs/{usuario_id}")
+async def guardar_prefs(usuario_id: int, prefs: dict):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        prefs_json = json.dumps(prefs, ensure_ascii=False)
+        cursor.execute("""
+            INSERT INTO preferencias (usuario_id, prefs)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE prefs=%s
+        """, (usuario_id, prefs_json, prefs_json))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error al guardar prefs")
+
+# ── NUEVO: Cargar preferencias ────────────────────────────────────
+@app.get("/cargar_prefs/{usuario_id}")
+async def cargar_prefs(usuario_id: int):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT prefs FROM preferencias WHERE usuario_id=%s", (usuario_id,))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if row:
+            return {"status": "ok", "prefs": json.loads(row["prefs"])}
+        return {"status": "ok", "prefs": {"tema": "oscuro", "acento": "Azul", "fuente": 14}}
+    except Exception as e:
+        return {"status": "ok", "prefs": {"tema": "oscuro", "acento": "Azul", "fuente": 14}}
+
+@app.post("/crear_incidencia")
+async def crear_incidencia(t: dict):
+    try:
+        charla = t.get('problema', '')
+
+        # 1. Evaluar si hay problema real
+        eval_completion = groq_client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": "Eres un técnico IT evaluando un historial de chat. Si el usuario NO tiene un problema técnico real, o si el problema YA FUE SOLUCIONADO durante la charla, responde ÚNICAMENTE con la palabra: FALSA_ALARMA. Si hay un problema técnico real y NO se ha solucionado, responde ÚNICAMENTE con la palabra: REAL."},
+                {"role": "user", "content": charla}
+            ],
+            model="llama-3.3-70b-versatile",
+            temperature=0.1,
+            max_tokens=10,
+        )
+        evaluacion = eval_completion.choices[0].message.content.strip().upper()
+        if "FALSA_ALARMA" in evaluacion:
+            return {"status": "ignorado"}
+
+        # 2. Generar resumen en 2-3 frases igual que versión PC
+        resumen_completion = groq_client.chat.completions.create(
+            messages=[{"role": "user", "content": (
+                f"Resume en 2-3 frases el problema técnico de esta conversación de soporte IT "
+                f"(solo el problema, sin mencionar que es un resumen, en español):\n{charla}"
+            )}],
+            model="llama-3.3-70b-versatile",
+            temperature=0.1,
+            max_tokens=120,
+        )
+        resumen = resumen_completion.choices[0].message.content.strip().strip('"')
+
+        # 3. Detectar urgencia por palabras clave (igual que versión PC)
+        pl = resumen.lower()
+        if any(p in pl for p in ["no enciende","pantalla azul","virus","hackeado","datos perdidos",
+                                   "no arranca","caido","servidor","ransomware","brecha","seguridad"]):
+            urgencia = "alta"
+        elif any(p in pl for p in ["impresora","internet","red","correo","contraseña",
+                                    "vpn","lento","cuelga","no conecta","wifi","actualizar"]):
+            urgencia = "media"
+        else:
+            urgencia = t.get('urgencia', 'baja')
+
+        # 4. Guardar en BD
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO incidencias (usuario, problema, urgencia, estado, fecha, departamento, email) VALUES (%s, %s, %s, 'pendiente', NOW(), %s, %s)",
+            (t['usuario'], resumen, urgencia, t['departamento'], t['email'])
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        # 5. Mensaje formato versión PC
+        urgencia_emoji = {"alta": "🔴", "media": "🟡", "baja": "🟢"}.get(urgencia, "⚪")
+        msg_ticket = (
+            f"✅ He creado un ticket automáticamente con tus datos:\n"
+            f"👤 Usuario: {t['usuario']}  |  🏢 Departamento: {t['departamento']}\n"
+            f"📧 Email: {t['email']}\n"
+            f"🔧 Problema: {resumen}\n"
+            f"{urgencia_emoji} Urgencia detectada: {urgencia.upper()}\n"
+            f"El equipo de IT revisará tu incidencia lo antes posible."
+        )
+        return {"status": "ok", "mensaje": msg_ticket}
+
     except Exception as e:
         print(f"Error en BD: {e}")
         return {"status": "error"}
