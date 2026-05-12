@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+groq
+mysql-connector-python
+python-dotenv
+pymupdf
+python-docx
+openpyxl
+python-multipart
