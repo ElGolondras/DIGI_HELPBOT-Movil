@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-// ─── Colores de acento disponibles ────────────────────────────────────────────
+// ─── Colores de acento — idénticos a la versión PC ───────────────────────────
 const Map<String, Color> kAcentos = {
   'Azul':    Color(0xFF2563EB),
   'Violeta': Color(0xFF7C3AED),
@@ -14,7 +15,35 @@ const Map<String, Color> kAcentos = {
   'Rosa':    Color(0xFFDB2777),
 };
 
-const String kBaseUrl = 'http://10.0.2.2:8000';
+// ─── Paletas de tema — idénticas a la versión PC ─────────────────────────────
+const Map<String, Map<String, Color>> kTemas = {
+  'oscuro': {
+    'bg_app':      Color(0xFF0F172A),
+    'sidebar_bg':  Color(0xFF0A0F1E),
+    'sidebar_hover': Color(0xFF1E293B),
+    'bubble_ia':   Color(0xFF1E293B),
+    'text_dark':   Color(0xFFF1F5F9),
+    'text_muted':  Color(0xFF64748B),
+    'input_bg':    Color(0xFF1E293B),
+    'border':      Color(0xFF334155),
+    'card':        Color(0xFF1E293B),
+    'header_bg':   Color(0xFF0F172A),
+  },
+  'claro': {
+    'bg_app':      Color(0xFFF0F2F5),
+    'sidebar_bg':  Color(0xFF1B2A4A),
+    'sidebar_hover': Color(0xFF243557),
+    'bubble_ia':   Color(0xFFFFFFFF),
+    'text_dark':   Color(0xFF1E293B),
+    'text_muted':  Color(0xFF94A3B8),
+    'input_bg':    Color(0xFFFFFFFF),
+    'border':      Color(0xFFCBD5E1),
+    'card':        Color(0xFFFFFFFF),
+    'header_bg':   Color(0xFFFFFFFF),
+  },
+};
+
+const String kBaseUrl = 'https://digi-helpbot-api.onrender.com';
 
 void main() {
   runApp(const DigiHelpApp());
@@ -95,8 +124,8 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         setState(() => _msg = 'Usuario o contraseña incorrectos');
       }
-    } catch (_) {
-      setState(() => _msg = 'Error de conexión con el servidor');
+    } catch (e) {
+      setState(() => _msg = 'Error: ${e.toString().substring(0, e.toString().length.clamp(0, 150))}');
     } finally {
       setState(() => _loading = false);
     }
@@ -104,58 +133,118 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    // Fondo oscuro igual que la versión PC
+    const bgColor     = Color(0xFF0F172A);
+    const cardColor   = Color(0xFF1E293B);
+    const borderColor = Color(0xFF334155);
+    const accentColor = Color(0xFF2563EB);
+    const textMuted   = Color(0xFF94A3B8);
+
     return Scaffold(
+      backgroundColor: bgColor,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: Column(
               children: [
-                CircleAvatar(radius: 48, backgroundColor: cs.primaryContainer,
-                  child: Icon(Icons.support_agent, size: 52, color: cs.primary)),
-                const SizedBox(height: 20),
-                Text('DigiHelp AI',
-                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: cs.onSurface)),
-                Text('Soporte IT Corporativo',
-                  style: TextStyle(color: cs.onSurfaceVariant)),
-                const SizedBox(height: 48),
-                TextField(
-                  controller: _userCtrl,
-                  decoration: const InputDecoration(labelText: 'Usuario',
-                    prefixIcon: Icon(Icons.person_outline), border: OutlineInputBorder()),
-                  onSubmitted: (_) => _login(),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _passCtrl,
-                  obscureText: _obscure,
-                  decoration: InputDecoration(
-                    labelText: 'Contraseña',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setState(() => _obscure = !_obscure),
-                    ),
+                // ── Logo igual que sidebar PC ──────────────────────────────
+                Container(
+                  width: 96, height: 96,
+                  decoration: BoxDecoration(
+                    color: accentColor,
+                    shape: BoxShape.circle,
+                    boxShadow: [BoxShadow(color: accentColor.withOpacity(0.4), blurRadius: 20, spreadRadius: 2)],
                   ),
-                  onSubmitted: (_) => _login(),
+                  child: ClipOval(
+                    child: Image.asset('assets/avatar.png', fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.support_agent, size: 52, color: Colors.white)),
+                  ),
                 ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity, height: 52,
-                  child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : FilledButton(
-                        onPressed: _login,
-                        child: const Text('Iniciar Sesión', style: TextStyle(fontSize: 16)),
+                const SizedBox(height: 20),
+                const Text('DigiHelp AI',
+                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Colors.white)),
+                const Text('Soporte IT Corporativo',
+                  style: TextStyle(color: textMuted, fontSize: 14)),
+                const SizedBox(height: 40),
+                // ── Card contenedor — igual que card PC ───────────────────
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: borderColor),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 4))],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Usuario', style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _userCtrl,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Introduce tu usuario',
+                          hintStyle: const TextStyle(color: Color(0xFF475569)),
+                          prefixIcon: const Icon(Icons.person_outline, color: textMuted),
+                          filled: true,
+                          fillColor: bgColor,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: borderColor)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: borderColor)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: accentColor, width: 2)),
+                        ),
+                        onSubmitted: (_) => _login(),
                       ),
+                      const SizedBox(height: 16),
+                      const Text('Contraseña', style: TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _passCtrl,
+                        obscureText: _obscure,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Introduce tu contraseña',
+                          hintStyle: const TextStyle(color: Color(0xFF475569)),
+                          prefixIcon: const Icon(Icons.lock_outline, color: textMuted),
+                          filled: true,
+                          fillColor: bgColor,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: borderColor)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: borderColor)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: accentColor, width: 2)),
+                          suffixIcon: IconButton(
+                            icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: textMuted),
+                            onPressed: () => setState(() => _obscure = !_obscure),
+                          ),
+                        ),
+                        onSubmitted: (_) => _login(),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity, height: 52,
+                        child: _loading
+                          ? const Center(child: CircularProgressIndicator(color: accentColor))
+                          : ElevatedButton(
+                              onPressed: _login,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: accentColor,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                elevation: 0,
+                              ),
+                              child: const Text('Entrar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            ),
+                      ),
+                      if (_msg.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Text(_msg, style: const TextStyle(color: Colors.redAccent, fontSize: 13), textAlign: TextAlign.center),
+                      ],
+                    ],
+                  ),
                 ),
-                if (_msg.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text(_msg, style: const TextStyle(color: Colors.redAccent)),
-                ],
+                const SizedBox(height: 20),
+                const Text('Soporte IT · v2.0', style: TextStyle(color: Color(0xFF475569), fontSize: 12)),
               ],
             ),
           ),
@@ -354,7 +443,7 @@ class _ChatScreenState extends State<ChatScreen> {
         request.files.add(await http.MultipartFile.fromPath('archivo', _archivo!.path!));
       }
 
-      final resStream = await request.send();
+      final resStream = await request.send().timeout(const Duration(seconds: 60));
       final res       = await http.Response.fromStream(resStream);
 
       if (res.statusCode == 200) {
@@ -375,8 +464,12 @@ class _ChatScreenState extends State<ChatScreen> {
         _guardarChat();
         _scrollAbajo();
       }
-    } catch (_) {
-      setState(() => _mensajes.add({'rol': 'assistant', 'texto': '❌ Error de conexión.', 'timestamp': _nowTimestamp()}));
+    } catch (e) {
+      setState(() => _mensajes.add({
+        'rol': 'assistant',
+        'texto': '❌ Error de conexión: ${e.toString().substring(0, e.toString().length.clamp(0, 120))}',
+        'timestamp': _nowTimestamp()
+      }));
     } finally {
       setState(() { _escribiendo = false; _archivo = null; });
     }
@@ -423,10 +516,8 @@ class _ChatScreenState extends State<ChatScreen> {
   // ── Abrir video ───────────────────────────────────────────────────────────────
   Future<void> _abrirVideo(String url) async {
     try {
-      // Convertir ID o URL de Drive a enlace de previsualización web
       String urlFinal = url;
       if (!url.startsWith('http')) {
-        // Es un ID de Drive directamente
         urlFinal = 'https://drive.google.com/file/d/$url/preview';
       } else if (url.contains('drive.google.com/file/d/')) {
         final id = url.split('/file/d/')[1].split('/')[0].split('?')[0];
@@ -435,8 +526,7 @@ class _ChatScreenState extends State<ChatScreen> {
         final id = url.split('id=')[1].split('&')[0];
         urlFinal = 'https://drive.google.com/file/d/$id/preview';
       }
-      final Uri uri = Uri.parse(urlFinal);
-      // Abrir en navegador interno para evitar el error de cuenta de Google
+      final uri = Uri.parse(urlFinal);
       if (!await launchUrl(uri, mode: LaunchMode.inAppWebView)) {
         if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -445,7 +535,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al abrir el vídeo: \$e')));
+        SnackBar(content: Text('Error al abrir el vídeo: $e')));
     }
   }
 
@@ -573,51 +663,92 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  // ── Helpers de color según tema PC ───────────────────────────────────────────
+  Map<String, Color> get _t => kTemas[_darkMode ? 'oscuro' : 'claro']!;
+  Color get _accent => kAcentos[_acento] ?? const Color(0xFF2563EB);
+
   // ── BUILD ─────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final t = _t;
     return Scaffold(
+      backgroundColor: t['bg_app'],
       appBar: AppBar(
-        title: Text(_titulo, overflow: TextOverflow.ellipsis),
-        backgroundColor: cs.primaryContainer,
+        backgroundColor: t['header_bg'],
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: IconThemeData(color: t['text_dark']),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_titulo, overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: t['text_dark'])),
+            Row(children: [
+              Container(width: 7, height: 7, margin: const EdgeInsets.only(right: 5),
+                decoration: const BoxDecoration(color: Color(0xFF22C55E), shape: BoxShape.circle)),
+              Text('En línea', style: TextStyle(fontSize: 11, color: t['text_muted'])),
+            ]),
+          ],
+        ),
+        bottom: PreferredSize(preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: t['border'])),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.tune),
-            tooltip: 'Personalización',
-            onPressed: _abrirPersonalizacion,
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Cerrar sesión',
-            onPressed: () => Navigator.pushReplacement(context,
-              MaterialPageRoute(builder: (_) => const LoginScreen())),
-          ),
+          IconButton(icon: Icon(Icons.tune, color: t['text_dark']), tooltip: 'Personalización', onPressed: _abrirPersonalizacion),
+          IconButton(icon: Icon(Icons.logout, color: t['text_dark']), tooltip: 'Cerrar sesión',
+            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()))),
         ],
       ),
 
-      // ── Drawer / sidebar ──────────────────────────────────────────────────────
+      // ── Drawer / sidebar — azul marino igual que PC ────────────────────────
       drawer: Drawer(
+        backgroundColor: _t['sidebar_bg'],
         child: Column(children: [
-          DrawerHeader(
-            decoration: BoxDecoration(color: cs.primaryContainer),
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.support_agent, size: 48, color: cs.primary),
-              const SizedBox(height: 8),
-              Text('Mis Chats',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onPrimaryContainer)),
+          // Header sidebar — logo + nombre
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 52, 16, 20),
+            color: _t['sidebar_bg'],
+            child: Column(children: [
+              Container(
+                width: 56, height: 56,
+                decoration: BoxDecoration(color: _accent, shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(color: _accent.withOpacity(0.4), blurRadius: 12)]),
+                child: ClipOval(
+                  child: Image.asset('assets/avatar.png', fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.support_agent, size: 32, color: Colors.white)),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text('DigiHelp AI', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(widget.nombreUsuario, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12), overflow: TextOverflow.ellipsis),
+              Text(widget.departamentoUsuario, style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
             ]),
           ),
-          ListTile(
-            leading: Icon(Icons.add_circle_outline, color: cs.primary),
-            title: const Text('Nuevo Chat', style: TextStyle(fontWeight: FontWeight.w600)),
-            onTap: () { _nuevoChat(); Navigator.pop(context); },
+          // Botón nuevo chat — igual que PC
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Nuevo Chat', style: TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _accent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () { _nuevoChat(); Navigator.pop(context); },
+              ),
+            ),
           ),
-          const Divider(),
+          Divider(color: const Color(0xFF243557), height: 12),
+          // Lista de chats
           Expanded(
             child: _chatsGuardados.isEmpty
-              ? Center(child: Text('Sin chats guardados',
-                  style: TextStyle(color: cs.onSurfaceVariant)))
+              ? Center(child: Text('Sin chats guardados', style: TextStyle(color: _t['text_muted'])))
               : ListView.builder(
                   itemCount: _chatsGuardados.length,
                   itemBuilder: (_, i) {
@@ -625,17 +756,15 @@ class _ChatScreenState extends State<ChatScreen> {
                     final esChatActual = chat['chat_id'] == _chatId;
                     return ListTile(
                       selected: esChatActual,
-                      selectedTileColor: cs.primaryContainer.withOpacity(0.4),
+                      selectedTileColor: const Color(0xFF243557),
                       leading: Icon(Icons.chat_bubble_outline,
-                        color: esChatActual ? cs.primary : cs.onSurfaceVariant, size: 20),
-                      title: Text(chat['titulo'],
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: esChatActual ? FontWeight.bold : FontWeight.normal)),
-                      subtitle: Text(chat['fecha'],
-                        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                        color: esChatActual ? _accent : const Color(0xFF64748B), size: 18),
+                      title: Text(chat['titulo'], maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: esChatActual ? _accent : Colors.white,
+                          fontWeight: esChatActual ? FontWeight.bold : FontWeight.normal, fontSize: 13)),
+                      subtitle: Text(chat['fecha'], style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
                       trailing: IconButton(
-                        icon: Icon(Icons.delete_outline, color: cs.error, size: 20),
+                        icon: const Icon(Icons.delete_outline, color: Color(0xFF64748B), size: 18),
                         onPressed: () async {
                           final confirmar = await showDialog<bool>(
                             context: context,
@@ -643,10 +772,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               title: const Text('Eliminar chat'),
                               content: const Text('¿Seguro que quieres eliminarlo?'),
                               actions: [
-                                TextButton(onPressed: () => Navigator.pop(context, false),
-                                  child: const Text('Cancelar')),
-                                FilledButton(onPressed: () => Navigator.pop(context, true),
-                                  child: const Text('Eliminar')),
+                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
                               ],
                             ),
                           );
@@ -658,33 +785,49 @@ class _ChatScreenState extends State<ChatScreen> {
                   },
                 ),
           ),
-          const Divider(),
+          Divider(color: const Color(0xFF243557), height: 1),
+          // Footer — cerrar sesión igual que PC
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Text(widget.nombreUsuario,
-              style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.power_settings_new, size: 18),
+                label: const Text('Cerrar sesión', style: TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFDC2626),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen())),
+              ),
+            ),
           ),
+          const SizedBox(height: 8),
+          const Text('Soporte IT · v2.0', style: TextStyle(color: Color(0xFF475569), fontSize: 11)),
+          const SizedBox(height: 12),
         ]),
       ),
 
       // ── Cuerpo ────────────────────────────────────────────────────────────────
       body: Column(children: [
-        // Archivo seleccionado
+        // Preview archivo seleccionado
         if (_archivo != null)
           Container(
             margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: cs.secondaryContainer,
+              color: _t['card'],
               borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _accent),
             ),
             child: Row(children: [
-              Icon(Icons.attach_file, size: 18, color: cs.secondary),
+              Icon(Icons.attach_file, size: 18, color: _accent),
               const SizedBox(width: 8),
               Expanded(child: Text(_archivo!.name, overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: cs.onSecondaryContainer, fontSize: 13))),
+                style: TextStyle(color: _t['text_dark'], fontSize: 13))),
               IconButton(
-                icon: const Icon(Icons.close, size: 18),
+                icon: Icon(Icons.close, size: 18, color: _t['text_muted']),
                 onPressed: () => setState(() => _archivo = null),
               ),
             ]),
@@ -692,85 +835,117 @@ class _ChatScreenState extends State<ChatScreen> {
 
         // Mensajes
         Expanded(
-          child: _mensajes.isEmpty
-            ? _pantallaBienvenida(cs)
-            : ListView.builder(
-                controller: _scrollCtrl,
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-                itemCount: _mensajes.length,
-                itemBuilder: (_, i) => _buildBurbuja(_mensajes[i], cs),
-              ),
+          child: Container(
+            color: _t['bg_app'],
+            child: _mensajes.isEmpty
+              ? _pantallaBienvenida()
+              : ListView.builder(
+                  controller: _scrollCtrl,
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                  itemCount: _mensajes.length,
+                  itemBuilder: (_, i) => _buildBurbuja(_mensajes[i], Theme.of(context).colorScheme),
+                ),
+          ),
         ),
 
         // Indicador de escritura
         if (_escribiendo)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          Container(
+            color: _t['bg_app'],
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Row(children: [
               SizedBox(width: 16, height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary)),
+                child: CircularProgressIndicator(strokeWidth: 2, color: _accent)),
               const SizedBox(width: 10),
-              Text('DigiHelp analizando…',
-                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+              Text('DigiHelp analizando…', style: TextStyle(color: _t['text_muted'], fontSize: 13)),
             ]),
           ),
 
         // Barra de entrada
-        _buildEntrada(cs),
+        _buildEntrada(),
       ]),
     );
   }
 
-  // ── Pantalla de bienvenida ────────────────────────────────────────────────────
-  Widget _pantallaBienvenida(ColorScheme cs) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          CircleAvatar(radius: 44, backgroundColor: cs.primaryContainer,
-            child: Icon(Icons.support_agent, size: 48, color: cs.primary)),
-          const SizedBox(height: 20),
-          Text('👋 Bienvenido, ${widget.nombreUsuario.split(' ').first}',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          Text('Describe tu incidencia IT y te ayudaré a resolverla paso a paso.',
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
-            textAlign: TextAlign.center),
-          const SizedBox(height: 32),
-          // Sugerencias rápidas
-          Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center,
-            children: ['🖨️ Impresora', '🌐 Internet', '💻 Ordenador lento', '🔑 Contraseña'].map((s) =>
-              ActionChip(
-                label: Text(s),
-                onPressed: () {
-                  _msgCtrl.text = s.substring(2).trim();
-                  _enviar();
-                },
+  // ── Pantalla de bienvenida — estética PC ────────────────────────────────────
+  Widget _pantallaBienvenida() {
+    return Container(
+      color: _t['bg_app'],
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 88, height: 88,
+              decoration: BoxDecoration(color: _accent, shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: _accent.withOpacity(0.3), blurRadius: 16)]),
+              child: ClipOval(
+                child: Image.asset('assets/avatar.png', fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.support_agent, size: 48, color: Colors.white)),
               ),
-            ).toList(),
-          ),
-        ]),
+            ),
+            const SizedBox(height: 20),
+            Text('Bienvenido a DigiHelp AI',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _t['text_dark']),
+              textAlign: TextAlign.center),
+            const SizedBox(height: 10),
+            Text('Describe tu incidencia IT y te ayudaré a resolverla paso a paso.',
+              style: TextStyle(color: _t['text_muted'], fontSize: 14), textAlign: TextAlign.center),
+            const SizedBox(height: 28),
+            // Sugerencias — igual que cards de bienvenida del PC
+            Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center,
+              children: [
+                'Mi impresora no conecta a la red',
+                'No puedo acceder a la VPN',
+                'Mi equipo está muy lento',
+                'Olvidé mi contraseña de dominio',
+              ].map((s) => GestureDetector(
+                onTap: () { _msgCtrl.text = s; _enviar(); },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: _t['card'],
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _accent),
+                  ),
+                  child: Text(s, style: TextStyle(color: _accent, fontSize: 13, fontWeight: FontWeight.w500)),
+                ),
+              )).toList(),
+            ),
+          ]),
+        ),
       ),
     );
   }
 
-  // ── Burbuja de mensaje ────────────────────────────────────────────────────────
+  // ── Burbuja de mensaje — colores idénticos a versión PC ─────────────────────
   Widget _buildBurbuja(Map<String, dynamic> msg, ColorScheme cs) {
-    final isUser  = msg['rol'] == 'user';
-    final texto   = msg['texto'] as String? ?? '';
-    final ts      = msg['timestamp'] as String? ?? '';
-    final video   = msg['ruta_video'] as String?;
+    final isUser = msg['rol'] == 'user';
+    final texto  = msg['texto'] as String? ?? '';
+    final ts     = msg['timestamp'] as String? ?? '';
+    final video  = msg['ruta_video'] as String?;
+    final t      = _t;
+
+    final bubbleColor  = isUser ? _accent : t['bubble_ia']!;
+    final textColor    = isUser ? Colors.white : t['text_dark']!;
+    final borderColor  = isUser ? Colors.transparent : t['border']!;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // Avatar IA — logo igual que sidebar PC
           if (!isUser) ...[
-            CircleAvatar(radius: 16, backgroundColor: cs.primaryContainer,
-              child: Icon(Icons.support_agent, size: 18, color: cs.primary)),
+            Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(color: _accent, shape: BoxShape.circle),
+              child: ClipOval(
+                child: Image.asset('assets/avatar.png', fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.support_agent, size: 18, color: Colors.white)),
+              ),
+            ),
             const SizedBox(width: 8),
           ],
           Flexible(
@@ -779,49 +954,48 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 // Nombre + timestamp
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 4, left: 4, right: 4),
+                  padding: const EdgeInsets.only(bottom: 4, left: 2, right: 2),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(isUser ? 'Tú' : 'DigiHelp AI',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                          color: isUser ? cs.primary : cs.secondary)),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _accent)),
                       if (ts.isNotEmpty) ...[
                         const SizedBox(width: 6),
-                        Text(ts, style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                        Text(ts, style: TextStyle(fontSize: 10, color: t['text_muted'])),
                       ],
                     ],
                   ),
                 ),
-                // Burbuja
+                // Burbuja — igual que PC
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isUser ? cs.primary : cs.surfaceVariant,
+                    color: bubbleColor,
                     borderRadius: BorderRadius.only(
-                      topLeft:     const Radius.circular(16),
-                      topRight:    const Radius.circular(16),
-                      bottomLeft:  Radius.circular(isUser ? 16 : 4),
-                      bottomRight: Radius.circular(isUser ? 4  : 16),
+                      topLeft:     const Radius.circular(14),
+                      topRight:    const Radius.circular(14),
+                      bottomLeft:  Radius.circular(isUser ? 14 : 4),
+                      bottomRight: Radius.circular(isUser ? 4  : 14),
                     ),
+                    border: Border.all(color: borderColor, width: isUser ? 0 : 1),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(texto,
-                        style: TextStyle(
-                          color: isUser ? cs.onPrimary : cs.onSurfaceVariant,
-                          fontSize: _fontSize,
-                          height: 1.4,
-                        ),
-                      ),
+                        style: TextStyle(color: textColor, fontSize: _fontSize, height: 1.5)),
                       if (video != null) ...[
                         const SizedBox(height: 10),
-                        FilledButton.icon(
+                        ElevatedButton.icon(
                           onPressed: () => _abrirVideo(video),
                           icon: const Icon(Icons.play_circle_fill, size: 18),
-                          label: const Text('Ver Videotutorial'),
-                          style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+                          label: const Text('Ver Videotutorial', style: TextStyle(fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFDC2626),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
                         ),
                       ],
                     ],
@@ -836,49 +1010,72 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ── Barra de entrada ──────────────────────────────────────────────────────────
-  Widget _buildEntrada(ColorScheme cs) {
+  // ── Barra de entrada — estética PC ──────────────────────────────────────────
+  Widget _buildEntrada() {
+    final bottomPadding = MediaQuery.of(context).padding.bottom + 10;
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+      padding: EdgeInsets.fromLTRB(10, 10, 10, bottomPadding),
       decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(top: BorderSide(color: cs.outlineVariant)),
+        color: _t['header_bg'],
+        border: Border(top: BorderSide(color: _t['border']!)),
       ),
       child: Row(children: [
-        IconButton(
-          icon: Icon(Icons.attach_file,
-            color: _archivo != null ? cs.primary : cs.onSurfaceVariant),
-          onPressed: () async {
-            final r = await FilePicker.platform.pickFiles();
-            if (r != null) setState(() => _archivo = r.files.first);
-          },
+        // Botón adjuntar — igual que PC
+        Container(
+          width: 44, height: 44,
+          decoration: BoxDecoration(
+            color: _t['card'],
+            shape: BoxShape.circle,
+            border: Border.all(color: _archivo != null ? _accent : _t['border']!),
+          ),
+          child: IconButton(
+            icon: Icon(Icons.attach_file, size: 20,
+              color: _archivo != null ? _accent : _t['text_muted']),
+            onPressed: () async {
+              final r = await FilePicker.platform.pickFiles();
+              if (r != null) setState(() => _archivo = r.files.first);
+            },
+          ),
         ),
+        const SizedBox(width: 8),
+        // Campo de texto — pill igual que PC
         Expanded(
-          child: TextField(
-            controller: _msgCtrl,
-            maxLines: null,
-            textInputAction: TextInputAction.send,
-            onSubmitted: (_) => _enviar(),
-            decoration: InputDecoration(
-              hintText: 'Describe tu problema…',
-              filled: true,
-              fillColor: cs.surfaceVariant,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(24),
-                borderSide: BorderSide.none,
+          child: Container(
+            decoration: BoxDecoration(
+              color: _t['input_bg'],
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: _t['border']!),
+            ),
+            child: TextField(
+              controller: _msgCtrl,
+              maxLines: null,
+              textInputAction: TextInputAction.send,
+              style: TextStyle(color: _t['text_dark'], fontSize: _fontSize),
+              onSubmitted: (_) => _enviar(),
+              decoration: InputDecoration(
+                hintText: 'Describe tu incidencia IT aquí...',
+                hintStyle: TextStyle(color: _t['text_muted'], fontSize: 13),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                border: InputBorder.none,
               ),
             ),
           ),
         ),
         const SizedBox(width: 8),
-        FilledButton(
-          onPressed: _escribiendo ? null : _enviar,
-          style: FilledButton.styleFrom(
-            shape: const CircleBorder(),
-            padding: const EdgeInsets.all(14),
+        // Botón enviar circular — color acento igual que PC
+        SizedBox(
+          width: 48, height: 48,
+          child: ElevatedButton(
+            onPressed: _escribiendo ? null : _enviar,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _accent,
+              foregroundColor: Colors.white,
+              shape: const CircleBorder(),
+              padding: EdgeInsets.zero,
+              elevation: 0,
+            ),
+            child: const Icon(Icons.send, size: 20),
           ),
-          child: const Icon(Icons.send, size: 20),
         ),
       ]),
     );
