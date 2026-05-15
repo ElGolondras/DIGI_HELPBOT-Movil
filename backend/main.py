@@ -84,6 +84,11 @@ class LoginData(BaseModel):
     username: str
     password: str
 
+@app.get("/")
+async def root():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/web/login")
+
 @app.post("/login")
 def login_usuario(datos: LoginData):
     db = get_db_connection()
@@ -352,3 +357,246 @@ async def crear_incidencia(t: dict):
     except Exception as e:
         print(f"Error en BD: {e}")
         return {"status": "error"}
+
+# ══════════════════════════════════════════════════════════
+# WEB PANEL — Rutas del panel de administración
+# ══════════════════════════════════════════════════════════
+from fastapi import Request, Form as FastForm
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles as StaticFilesWeb
+import os as _os
+
+# Templates y archivos estáticos del panel web
+_templates_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "templates")
+_static_dir    = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "static")
+
+print(f"[DEBUG] templates dir: {_templates_dir}")
+print(f"[DEBUG] static dir: {_static_dir}")
+print(f"[DEBUG] templates existe: {_os.path.exists(_templates_dir)}")
+print(f"[DEBUG] static existe: {_os.path.exists(_static_dir)}")
+print(f"[DEBUG] archivos en templates: {_os.listdir(_templates_dir) if _os.path.exists(_templates_dir) else 'NO EXISTE'}")
+
+templates = Jinja2Templates(directory=_templates_dir)
+app.mount("/web/static", StaticFilesWeb(directory=_static_dir), name="web-static")
+
+# ── Helpers de sesión (cookie simple firmada) ──────────────────────────────────
+import json as _json
+import base64 as _b64
+
+def _get_session(request: Request) -> dict:
+    raw = request.cookies.get("dh_session", "")
+    try:
+        return _json.loads(_b64.b64decode(raw).decode())
+    except Exception:
+        return {}
+
+def _make_session_cookie(data: dict) -> str:
+    return _b64.b64encode(_json.dumps(data).encode()).decode()
+
+def _render(request: Request, template: str, ctx: dict = {}, session: dict = {}):
+    """Renderiza una plantilla añadiendo user y dark_mode del contexto."""
+    ctx.update({
+        "request":   request,
+        "user":      session.get("user", {}),
+        "dark_mode": session.get("dark_mode", True),
+    })
+    return templates.TemplateResponse(template, ctx)
+
+def _require_login(session: dict):
+    if not session.get("user"):
+        return RedirectResponse("/web/login", status_code=302)
+    return None
+
+def _require_it(session: dict):
+    r = _require_login(session)
+    if r: return r
+    if session["user"].get("departamento") != "Informatica":
+        return RedirectResponse("/web/dashboard", status_code=302)
+    return None
+
+# ── LOGIN ──────────────────────────────────────────────────────────────────────
+@app.get("/web/login", response_class=HTMLResponse)
+async def web_login_get(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request, "error": ""})
+
+@app.post("/web/login", response_class=HTMLResponse)
+async def web_login_post(request: Request, user: str = FastForm(...), password: str = FastForm(alias="pass")):
+    conn = get_db_connection()
+    if not conn:
+        return templates.TemplateResponse("login.html", {"request": request, "error": "Error de conexión con la BD"})
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM usuarios WHERE username=%s AND contrasenia=%s", (user, password))
+    row = cursor.fetchone()
+    cursor.close(); conn.close()
+    if not row:
+        return templates.TemplateResponse("login.html", {"request": request, "error": "Credenciales incorrectas"})
+    session_data = {"user": dict(row), "dark_mode": True}
+    resp = RedirectResponse("/web/dashboard", status_code=302)
+    resp.set_cookie("dh_session", _make_session_cookie(session_data), httponly=True, samesite="lax")
+    return resp
+
+@app.get("/web/logout")
+async def web_logout():
+    resp = RedirectResponse("/web/login", status_code=302)
+    resp.delete_cookie("dh_session")
+    return resp
+
+@app.post("/web/toggle-theme")
+async def web_toggle_theme(request: Request):
+    session = _get_session(request)
+    session["dark_mode"] = not session.get("dark_mode", True)
+    referer = request.headers.get("referer", "/web/dashboard")
+    resp = RedirectResponse(referer, status_code=302)
+    resp.set_cookie("dh_session", _make_session_cookie(session), httponly=True, samesite="lax")
+    return resp
+
+# ── DASHBOARD ──────────────────────────────────────────────────────────────────
+@app.get("/web/dashboard", response_class=HTMLResponse)
+async def web_dashboard(request: Request):
+    session = _get_session(request)
+    r = _require_login(session)
+    if r: return r
+    return _render(request, "dashboard.html", {"pagina": "dashboard"}, session)
+
+@app.get("/web", response_class=HTMLResponse)
+async def web_root(request: Request):
+    return RedirectResponse("/web/dashboard", status_code=302)
+
+# ── TICKET NUEVO ───────────────────────────────────────────────────────────────
+@app.get("/web/ticket/nuevo", response_class=HTMLResponse)
+async def web_ticket_get(request: Request):
+    session = _get_session(request)
+    r = _require_login(session)
+    if r: return r
+    user = session["user"]
+    conn = get_db_connection()
+    tickets = []
+    if conn:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM incidencias WHERE usuario=%s ORDER BY id DESC LIMIT 5", (user["nombre_completo"],))
+        tickets = cursor.fetchall()
+        cursor.close(); conn.close()
+    return _render(request, "crear_ticket.html", {"pagina": "ticket", "mis_tickets": tickets, "success": False}, session)
+
+@app.post("/web/ticket/nuevo", response_class=HTMLResponse)
+async def web_ticket_post(request: Request, problema: str = FastForm(...), urgencia: str = FastForm(...)):
+    session = _get_session(request)
+    r = _require_login(session)
+    if r: return r
+    user = session["user"]
+    conn = get_db_connection()
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO incidencias (usuario, problema, urgencia, estado, fecha, departamento, email) VALUES (%s,%s,%s,'pendiente',NOW(),%s,%s)",
+            (user["nombre_completo"], problema, urgencia, user.get("departamento",""), user.get("email",""))
+        )
+        conn.commit()
+        cursor.execute("SELECT * FROM incidencias WHERE usuario=%s ORDER BY id DESC LIMIT 5", (user["nombre_completo"],))
+        tickets = cursor.fetchall()
+        cursor.close(); conn.close()
+    return _render(request, "crear_ticket.html", {"pagina": "ticket", "mis_tickets": tickets, "success": True}, session)
+
+# ── GESTIÓN TICKETS (solo IT) ──────────────────────────────────────────────────
+@app.get("/web/tickets", response_class=HTMLResponse)
+async def web_tickets(request: Request):
+    session = _get_session(request)
+    r = _require_it(session)
+    if r: return r
+    conn = get_db_connection()
+    tickets = []
+    if conn:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM incidencias ORDER BY id DESC")
+        tickets = cursor.fetchall()
+        cursor.close(); conn.close()
+    return _render(request, "gestion_tickets.html", {"pagina": "tickets", "tickets": tickets}, session)
+
+@app.post("/web/tickets/actualizar")
+async def web_tickets_actualizar(request: Request, ticket_id: int = FastForm(...), nuevo_estado: str = FastForm(...)):
+    session = _get_session(request)
+    r = _require_it(session)
+    if r: return r
+    conn = get_db_connection()
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE incidencias SET estado=%s WHERE id=%s", (nuevo_estado, ticket_id))
+        conn.commit(); cursor.close(); conn.close()
+    return RedirectResponse("/web/tickets", status_code=302)
+
+@app.get("/web/tickets/eliminar/{ticket_id}")
+async def web_tickets_eliminar(request: Request, ticket_id: int):
+    session = _get_session(request)
+    r = _require_it(session)
+    if r: return r
+    conn = get_db_connection()
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM incidencias WHERE id=%s", (ticket_id,))
+        conn.commit(); cursor.close(); conn.close()
+    return RedirectResponse("/web/tickets", status_code=302)
+
+# ── GESTIÓN USUARIOS (solo IT) ─────────────────────────────────────────────────
+@app.get("/web/usuarios", response_class=HTMLResponse)
+async def web_usuarios(request: Request, edit: int = None):
+    session = _get_session(request)
+    r = _require_it(session)
+    if r: return r
+    conn = get_db_connection()
+    usuarios = []; editar = None
+    if conn:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM usuarios")
+        usuarios = cursor.fetchall()
+        if edit:
+            cursor.execute("SELECT * FROM usuarios WHERE id=%s", (edit,))
+            editar = cursor.fetchone()
+        cursor.close(); conn.close()
+    return _render(request, "gestion_usuarios.html", {"pagina": "usuarios", "usuarios": usuarios, "editar": editar}, session)
+
+@app.post("/web/usuarios/crear")
+async def web_usuarios_crear(request: Request,
+    nombre: str = FastForm(...), username: str = FastForm(...),
+    password: str = FastForm(alias="pass"), email: str = FastForm(...), depto: str = FastForm(...)):
+    session = _get_session(request)
+    r = _require_it(session)
+    if r: return r
+    conn = get_db_connection()
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO usuarios (username,contrasenia,nombre_completo,departamento,email) VALUES (%s,%s,%s,%s,%s)",
+                       (username, password, nombre, depto, email))
+        conn.commit(); cursor.close(); conn.close()
+    return RedirectResponse("/web/usuarios", status_code=302)
+
+@app.post("/web/usuarios/actualizar")
+async def web_usuarios_actualizar(request: Request, user_id: int = FastForm(...),
+    nombre: str = FastForm(...), username: str = FastForm(...),
+    password: str = FastForm(alias="pass", default=""), email: str = FastForm(...), depto: str = FastForm(...)):
+    session = _get_session(request)
+    r = _require_it(session)
+    if r: return r
+    conn = get_db_connection()
+    if conn:
+        cursor = conn.cursor()
+        if password:
+            cursor.execute("UPDATE usuarios SET username=%s,contrasenia=%s,nombre_completo=%s,departamento=%s,email=%s WHERE id=%s",
+                           (username, password, nombre, depto, email, user_id))
+        else:
+            cursor.execute("UPDATE usuarios SET username=%s,nombre_completo=%s,departamento=%s,email=%s WHERE id=%s",
+                           (username, nombre, depto, email, user_id))
+        conn.commit(); cursor.close(); conn.close()
+    return RedirectResponse("/web/usuarios", status_code=302)
+
+@app.get("/web/usuarios/eliminar/{uid}")
+async def web_usuarios_eliminar(request: Request, uid: int):
+    session = _get_session(request)
+    r = _require_it(session)
+    if r: return r
+    conn = get_db_connection()
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM usuarios WHERE id=%s", (uid,))
+        conn.commit(); cursor.close(); conn.close()
+    return RedirectResponse("/web/usuarios", status_code=302)

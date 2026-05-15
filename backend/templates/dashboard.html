@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Inicio | DigiHelp AI{% endblock %}
+
+{% block head %}
+<style>
+    .bg-main { background-color: #f8fafc; transition: background 0.5s; }
+    .dark .bg-main { background-color: #020617; }
+    @keyframes flicker {
+        0%, 18%, 22%, 25%, 53%, 57%, 100% { opacity: 1; filter: brightness(1); }
+        20%, 24%, 55% { opacity: 0.3; filter: brightness(0.7); }
+    }
+    .neon-flicker { animation: flicker 2s linear forwards; }
+    @keyframes floating { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-20px); } }
+    .bot-float { animation: floating 4s ease-in-out infinite; animation-delay: 2s; }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="flex-1 flex items-center justify-center p-10 content-layer">
+    <div class="max-w-4xl w-full text-center">
+        <div class="mb-8 inline-block neon-flicker">
+            <div class="relative bot-float">
+                <div class="absolute inset-0 bg-pink-500 blur-[100px] opacity-20 dark:opacity-40 animate-pulse"></div>
+                <img src="/web/static/avatar.png" alt="Bot" class="relative w-40 mx-auto drop-shadow-[0_0_30px_rgba(219,39,119,0.3)]">
+            </div>
+        </div>
+        <div class="neon-flicker" style="animation-delay:0.2s">
+            <h1 class="text-5xl md:text-6xl font-black text-slate-900 dark:text-white mb-4">
+                ¡Hola, <span class="text-pink-600">{{ user.get('nombre_completo', 'Usuario').split()[0] if user else 'Usuario' }}</span>!
+            </h1>
+            <p class="text-xl text-slate-500 dark:text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+                Bienvenido a tu centro de soporte inteligente.<br>
+                ¿En qué podemos ayudarte hoy para que nada te detenga?
+            </p>
+            <div class="flex flex-wrap justify-center gap-6 mb-16">
+                <a href="/web/ticket/nuevo" class="px-8 py-4 bg-pink-600 text-white font-bold rounded-2xl shadow-lg hover:shadow-pink-500/40 transition-all hover:-translate-y-1">
+                    🚀 Abrir una Incidencia
+                </a>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10 neon-flicker" style="animation-delay:0.5s">
+            <div class="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-3xl border border-white/20 dark:border-slate-800 shadow-sm">
+                <div class="text-2xl mb-2">⚡</div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Respuesta</div>
+                <div class="text-xl font-black dark:text-white">Menos de 1 minuto</div>
+            </div>
+            <div class="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-3xl border border-white/20 dark:border-slate-800 shadow-sm">
+                <div class="text-2xl mb-2">🛠️</div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Soporte</div>
+                <div class="text-xl font-black dark:text-white">24/7 Activo</div>
+            </div>
+            <div class="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-3xl border border-white/20 dark:border-slate-800 shadow-sm">
+                <div class="text-2xl mb-2">🧠</div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Tecnología</div>
+                <div class="text-xl font-black dark:text-white">Impulsado por AI</div>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}

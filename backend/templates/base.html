@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es" class="{{ 'dark' if dark_mode else '' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}DigiHelp AI{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script>tailwind.config = { darkMode: 'class' }</script>
+    <style>
+        #particles-js { position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; }
+        .content-layer { position: relative; z-index: 10; width: 100%; min-height: 100vh; pointer-events: none; }
+        .content-layer a, .content-layer button, .content-layer input,
+        .content-layer select, .content-layer textarea, #sidebar-container { pointer-events: auto !important; }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 min-h-screen flex transition-colors duration-300">
+<div id="particles-js"></div>
+
+<!-- ── Info usuario top-right ── -->
+<div class="fixed top-4 right-4 z-40">
+    <div class="flex items-center gap-3 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20 dark:border-slate-800 shadow-xl">
+        <div class="text-right">
+            <p class="text-[9px] font-black text-pink-600 uppercase tracking-[0.15em] leading-none mb-1">{{ user.get("departamento", "") if user else "" }}</p>
+            <p class="text-xs font-bold text-slate-700 dark:text-white leading-none whitespace-nowrap">{{ user.get("nombre_completo", "") if user else "" }}</p>
+        </div>
+        <div class="w-9 h-9 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl flex items-center justify-center shadow-lg border border-white/10 shrink-0">
+            <span class="text-white font-black text-base">{{ user.get("nombre_completo", "?")[0].upper() if user else "?" }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- ── Sidebar hover ── -->
+<div id="sidebar-container" class="group fixed left-0 top-0 h-screen z-50 w-2 hover:w-64 bg-transparent transition-all duration-500 ease-in-out">
+    <div class="absolute left-0 top-1/2 -translate-y-1/2 w-8 h-12 bg-white dark:bg-slate-900 border border-l-0 border-gray-200 dark:border-slate-800 rounded-r-full flex items-center justify-center shadow-md transition-all duration-500 group-hover:left-64 group-hover:rounded-l-full group-hover:rounded-r-none group-hover:-translate-x-full">
+        <span class="text-pink-600 font-black text-sm"><span class="group-hover:hidden">›</span><span class="hidden group-hover:block">‹</span></span>
+    </div>
+    <div class="absolute left-0 top-0 h-full w-64 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col shadow-2xl transition-transform duration-500 ease-in-out -translate-x-full group-hover:translate-x-0 overflow-hidden">
+        <div class="p-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">
+            <div class="flex items-center gap-3 mb-1">
+                <img src="/web/static/avatar.png" class="w-10 h-10 rounded-xl object-cover" alt="Logo">
+                <div class="text-xl font-bold text-pink-600 tracking-tight whitespace-nowrap">DigiHelp AI</div>
+            </div>
+            <p class="text-[10px] text-gray-400 uppercase font-bold mt-1 whitespace-nowrap">Panel de Empresa</p>
+        </div>
+        <nav class="flex-1 px-4 space-y-1 overflow-y-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-150">
+            <a href="/web/dashboard" class="flex items-center gap-3 px-4 py-3 rounded-xl transition font-medium {{ 'bg-pink-50 text-pink-700 dark:bg-pink-900/20 dark:text-pink-400' if pagina == 'dashboard' else 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800' }}">
+                <span class="text-lg">🏠</span><span class="whitespace-nowrap">Inicio</span>
+            </a>
+            <a href="/web/ticket/nuevo" class="flex items-center gap-3 px-4 py-3 rounded-xl transition font-medium {{ 'bg-pink-50 text-pink-700 dark:bg-pink-900/20 dark:text-pink-400' if pagina == 'ticket' else 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800' }}">
+                <span class="text-lg">🚀</span><span class="whitespace-nowrap">Nueva Incidencia</span>
+            </a>
+            {% if user.departamento == 'Informatica' %}
+            <div class="pt-6 pb-2 px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Administración IT</div>
+            <a href="/web/tickets" class="flex items-center gap-3 px-4 py-3 rounded-xl transition font-medium {{ 'bg-pink-50 text-pink-700 dark:bg-pink-900/20 dark:text-pink-400' if pagina == 'tickets' else 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800' }}">
+                <span class="text-lg">🎫</span><span class="whitespace-nowrap">Tickets Globales</span>
+            </a>
+            <a href="/web/usuarios" class="flex items-center gap-3 px-4 py-3 rounded-xl transition font-medium {{ 'bg-pink-50 text-pink-700 dark:bg-pink-900/20 dark:text-pink-400' if pagina == 'usuarios' else 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800' }}">
+                <span class="text-lg">👥</span><span class="whitespace-nowrap">Usuarios</span>
+            </a>
+            {% endif %}
+        </nav>
+        <div class="p-4 border-t border-gray-100 dark:border-slate-800 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-200">
+            <form method="POST" action="/web/toggle-theme" class="mb-2">
+                <button class="flex items-center gap-3 px-4 py-3 text-gray-500 dark:text-gray-400 hover:text-pink-600 transition-all w-full">
+                    <span class="text-lg">{{ '☀️' if dark_mode else '🌙' }}</span>
+                    <span class="font-bold text-sm whitespace-nowrap">{{ 'Modo Claro' if dark_mode else 'Modo Oscuro' }}</span>
+                </button>
+            </form>
+            <a href="/web/logout" class="flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 bg-red-50 dark:bg-red-900/10 hover:bg-red-100 rounded-xl transition-all font-bold">
+                Cerrar Sesión
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- ── Contenido ── -->
+{% block content %}{% endblock %}
+
+<script>
+particlesJS("particles-js", {
+    "particles": {
+        "number": { "value": 60, "density": { "enable": true, "value_area": 800 } },
+        "color": { "value": "#db2777" }, "shape": { "type": "circle" },
+        "opacity": { "value": 0.3 }, "size": { "value": 2, "random": true },
+        "line_linked": { "enable": true, "distance": 150, "color": "#db2777", "opacity": 0.2, "width": 1 },
+        "move": { "enable": true, "speed": 1.5, "out_mode": "out" }
+    },
+    "interactivity": {
+        "detect_on": "canvas",
+        "events": { "onhover": { "enable": true, "mode": "grab" }, "onclick": { "enable": true, "mode": "push" } }
+    }
+});
+</script>
+</body>
+</html>
