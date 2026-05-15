@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import os
 import mysql.connector
 from groq import Groq
+from jinja2 import Environment, FileSystemLoader
 
 class ChatCreate(BaseModel):
     usuario_id: int
@@ -377,7 +378,8 @@ print(f"[DEBUG] templates existe: {_os.path.exists(_templates_dir)}")
 print(f"[DEBUG] static existe: {_os.path.exists(_static_dir)}")
 print(f"[DEBUG] archivos en templates: {_os.listdir(_templates_dir) if _os.path.exists(_templates_dir) else 'NO EXISTE'}")
 
-templates = Jinja2Templates(directory=_templates_dir)
+_jinja_env = Environment(loader=FileSystemLoader(_templates_dir), cache_size=0)
+templates = Jinja2Templates(env=_jinja_env)
 app.mount("/web/static", StaticFilesWeb(directory=_static_dir), name="web-static")
 
 # ── Helpers de sesión (cookie simple firmada) ──────────────────────────────────
