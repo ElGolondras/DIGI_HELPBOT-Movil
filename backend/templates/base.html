@@ -51,7 +51,7 @@
             <a href="/web/ticket/nuevo" class="flex items-center gap-3 px-4 py-3 rounded-xl transition font-medium {{ 'bg-pink-50 text-pink-700 dark:bg-pink-900/20 dark:text-pink-400' if pagina == 'ticket' else 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800' }}">
                 <span class="text-lg">🚀</span><span class="whitespace-nowrap">Nueva Incidencia</span>
             </a>
-            {% if user.departamento == 'Informatica' %}
+            {% if user and user.get('departamento') == 'Informatica' %}
             <div class="pt-6 pb-2 px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Administración IT</div>
             <a href="/web/tickets" class="flex items-center gap-3 px-4 py-3 rounded-xl transition font-medium {{ 'bg-pink-50 text-pink-700 dark:bg-pink-900/20 dark:text-pink-400' if pagina == 'tickets' else 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800' }}">
                 <span class="text-lg">🎫</span><span class="whitespace-nowrap">Tickets Globales</span>
